@@ -1,16 +1,25 @@
-from typing import Optional
+from typing import Optional, List
 
-from pydantic import BaseModel
+from pydantic.main import BaseModel
 
 
-class TrainingConfiguration(BaseModel):
-    model: str
-    epochs: int
-    rounds: int
-    optimizer: str
-    strategy: str
+class BasicConfiguration(BaseModel):
+    config_id: Optional[str]
     batch_size: Optional[int] = 32
     steps_per_epoch: Optional[int] = 3
+    epochs: int
+    learning_rate: Optional[float] = 0.05
+
+
+class TCTrainingConfiguration(BaseModel):
+    # TODO: add more optional parameters here in order to be able to customize all strategies
+    strategy: str
+    model_id: str
+    num_rounds: int
+    min_fit_clients: int  # Minimum number of clients to be sampled for the next round
+    min_available_clients: int
+    adapt_config: str
+    config: List[BasicConfiguration]
 
     class Config:
         arbitrary_types_allowed = True
