@@ -1,5 +1,5 @@
 from typing import Optional, List
-
+from enum import Enum
 from pydantic.main import BaseModel
 
 
@@ -9,6 +9,22 @@ class BasicConfiguration(BaseModel):
     steps_per_epoch: Optional[int] = 3
     epochs: int
     learning_rate: Optional[float] = 0.05
+
+
+class StatusEnum(str, Enum):
+    INACTIVE = 'INACTIVE'
+    WAITING = 'WAITING'
+    TRAINING = 'TRAINING'
+    INTERRUPTED = 'INTERRUPTED'
+    FINISHED = 'FINISHED'
+
+
+class Status(BaseModel):
+    status: StatusEnum = StatusEnum.INACTIVE
+    round: int = 0
+
+    class Config:
+        use_enum_values = True
 
 
 class TCTrainingConfiguration(BaseModel):

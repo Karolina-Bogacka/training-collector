@@ -1,8 +1,8 @@
-from typing import Dict, Callable
 import socket
+from typing import Dict, Callable
 
-from flwr.server.strategy import Strategy
 import flwr as fl
+from flwr.server.strategy import Strategy
 
 from config import SERVER_ADDRESS, FEDERATED_PORT
 from pydloc.models import TCTrainingConfiguration
@@ -18,11 +18,12 @@ def construct_strategy(id: int, data: TCTrainingConfiguration) -> Strategy:
     config_fn = get_on_fit_config_fn() if data.strategy == "custom" else None
     if data.strategy == "avg":
         return TCFedAvg(
+            num_rounds=data.num_rounds,
             min_fit_clients=data.min_fit_clients,  # Minimum number of clients to be sampled for the next round
             min_available_clients=data.min_available_clients,
             min_eval_clients=data.min_available_clients,
             on_fit_config_fn=config_fn,
-            id = id)
+            id=id)
     elif data.strategy == "fast-and-slow":
         return fl.server.strategy.FastAndSlow(
             min_fit_clients=data.min_fit_clients,  # Minimum number of clients to be sampled for the next round
@@ -66,7 +67,6 @@ def construct_strategy(id: int, data: TCTrainingConfiguration) -> Strategy:
         )
     else:
         # TODO: perform a lookup to get an existing custom strategy from repository
-        # or from local memory, if we desire to do so
         return fl.server.strategy.FedAvg(
             min_fit_clients=data.min_fit_clients,  # Minimum number of clients to be sampled for the next round
             min_available_clients=data.min_available_clients,
@@ -91,7 +91,8 @@ def get_on_fit_config_fn() -> Callable[[int], Dict[str, str]]:
 
 def start_flower_server(id: int, data: TCTrainingConfiguration):
     strategy = construct_strategy(id, data)
-    while is_port_in_use(FEDERATED_PORT+int(id)):
-        id += 1
-    fl.server.start_server(config={"num_rounds": data.num_rounds}, server_address=f"{SERVER_ADDRESS}:{FEDERATED_PORT + int(id)}",
+    while is_port_in_use(FEDERATED_PORT + int(id)):
+        id = int(id) + 1
+    fl.server.start_server(config={"num_rounds": data.num_rounds},
+                           server_address=f"{SERVER_ADDRESS}:{FEDERATED_PORT + int(id)}",
                            strategy=strategy)
