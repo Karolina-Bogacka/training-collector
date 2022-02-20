@@ -63,10 +63,15 @@ class TCFedAvg(fl.server.strategy.FedAvg):
                 pickle.dump(aggregated_weights, open(f"{path}/aggregated-weights.sav", 'wb'))
                 with open(f"{path}/aggregated-weights.sav", 'rb') as f:
                     try:
-                        r = requests.post(f"{REPOSITORY_ADDRESS}/model/{self.id}/{rnd}", files={"file": f})
+                        r = requests.put(f"{REPOSITORY_ADDRESS}/model/{self.id}/{rnd}", files={"file": f})
+                        r = requests.put(f"{REPOSITORY_ADDRESS}/model/meta/{self.id}/{rnd}",
+                                         json={"meta": {"one": f"{self.num_rounds}", "two": f"{self.id}"}})
                     except requests.exceptions.RequestException as e:
                         print(f"Failed to send weights of job {self.id} to repository")
                         traceback.print_exc()
+
+                os.remove(f"{path}/aggregated-weights.sav")
+                os.rmdir(f"{path}")
             jobs[self.id] = Status(status=StatusEnum.FINISHED, round=rnd)
         else:
             jobs[self.id] = Status(status=StatusEnum.TRAINING, round=rnd)
