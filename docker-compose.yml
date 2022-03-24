@@ -2,6 +2,6 @@ version: '3.8'
 services:
   app:
     container_name: training_collector
-    build: .
+    build: application
     ports:
       - "8000:8000"
