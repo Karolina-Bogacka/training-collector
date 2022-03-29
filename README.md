@@ -1,5 +1,7 @@
 # FL Training Collector
 
+If the common docker network is not yet started, run 
+`docker network create fl_common_network`.
 
 Run python main.py to run the server.
 

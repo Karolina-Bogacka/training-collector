@@ -1,7 +1,16 @@
-version: '3.8'
+version: '3.7'
 services:
-  app:
+  training_collector:
+    restart: always
     container_name: training_collector
     build: application
+    networks:
+      - default
     ports:
       - "8000:8000"
+      - "8080:8080"
+
+networks:
+  default:
+    driver: bridge
+    name: custom_fl

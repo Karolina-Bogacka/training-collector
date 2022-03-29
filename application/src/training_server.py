@@ -91,8 +91,6 @@ def get_on_fit_config_fn() -> Callable[[int], Dict[str, str]]:
 
 def start_flower_server(id: int, data: TCTrainingConfiguration):
     strategy = construct_strategy(id, data)
-    while is_port_in_use(FEDERATED_PORT + int(id)):
-        id = int(id) + 1
     fl.server.start_server(config={"num_rounds": data.num_rounds},
-                           server_address=f"{SERVER_ADDRESS}:{FEDERATED_PORT + int(id)}",
+                           server_address=f"[::]:{FEDERATED_PORT}",
                            strategy=strategy)
