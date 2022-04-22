@@ -2,11 +2,13 @@ import socket
 from typing import Dict, Callable
 
 import flwr as fl
+import tensorflow as tf
+from config import FEDERATED_PORT
 from flwr.server.strategy import Strategy
-
-from config import SERVER_ADDRESS, FEDERATED_PORT
 from pydloc.models import TCTrainingConfiguration
 from src.strategy_manager import TCFedAvg
+
+from application.src.strategy_manager import get_cnn_model_1, get_eval_fn
 
 
 def is_port_in_use(port):
@@ -14,7 +16,7 @@ def is_port_in_use(port):
         return s.connect_ex(('localhost', port)) == 0
 
 
-def construct_strategy(id: int, data: TCTrainingConfiguration) -> Strategy:
+def construct_strategy(id: int, data: TCTrainingConfiguration, model=None) -> Strategy:
     config_fn = get_on_fit_config_fn() if data.strategy == "custom" else None
     if data.strategy == "avg":
         return TCFedAvg(
@@ -23,6 +25,7 @@ def construct_strategy(id: int, data: TCTrainingConfiguration) -> Strategy:
             min_available_clients=data.min_available_clients,
             min_eval_clients=data.min_available_clients,
             on_fit_config_fn=config_fn,
+            eval_fn=get_eval_fn(model),
             id=id)
     elif data.strategy == "fast-and-slow":
         return fl.server.strategy.FastAndSlow(
@@ -90,7 +93,16 @@ def get_on_fit_config_fn() -> Callable[[int], Dict[str, str]]:
 
 
 def start_flower_server(id: int, data: TCTrainingConfiguration):
-    strategy = construct_strategy(id, data)
+    model = get_cnn_model_1((128, 128) + (3,))
+    adam_opt = tf.keras.optimizers.Adam(learning_rate=0.0001, amsgrad=True)
+    metrics = ["accuracy", tf.keras.metrics.Precision(name="precision")]
+    metric_names = ["accuracy", "precision"]
+    model.compile(
+        optimizer=adam_opt,
+        loss=tf.keras.losses.BinaryCrossentropy(),
+        metrics=metrics
+    )
+    strategy = construct_strategy(id, data, model)
     fl.server.start_server(config={"num_rounds": data.num_rounds},
                            server_address=f"[::]:{FEDERATED_PORT}",
                            strategy=strategy)

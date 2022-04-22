@@ -2,6 +2,7 @@ FROM python:3.8.3-slim-buster
 WORKDIR /code
 COPY requirements.txt /code/requirements.txt
 RUN python -m pip install --upgrade pip
+RUN pip3 install pillow
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 COPY . /code/application
 ENV PYTHONPATH "${PYTHONPATH}:/code/application"

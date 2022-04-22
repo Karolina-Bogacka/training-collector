@@ -7,9 +7,9 @@ Sample request body for post /job/config/{id}:
 {
 "strategy" : "avg",
 "model_id" : "base",
-"num_rounds" : "3",
-"min_fit_clients" : "1",
-"min_available_clients": "1",
+"num_rounds" : "50",
+"min_fit_clients" : "6",
+"min_available_clients": "6",
 "adapt_config": "custom",
 "config":[{
       "config_id" : "min_effort",
