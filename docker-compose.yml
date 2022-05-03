@@ -11,7 +11,7 @@ services:
       - "8080:8080"
     volumes:
       - type: bind
-        source: /mnt/c/Users/kboga/PycharmProjects/trainingCollectorBeta/data
+        source: /Users/karolinabogacka/PycharmProjects/fl-local-operations/data
         target: /data
 
 networks:

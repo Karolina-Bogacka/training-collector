@@ -1,4 +1,5 @@
 import traceback
+from logging import INFO
 from typing import List, Tuple, Optional, Callable, Dict
 import os
 import pickle
@@ -11,6 +12,7 @@ import requests
 import tensorflow as tf
 from config import REPOSITORY_ADDRESS, JSON_FILE
 from flwr.common import Weights, Scalar, Parameters, EvaluateRes, parameters_to_weights
+from flwr.common.logger import log
 from flwr.server.client_proxy import ClientProxy
 from pydloc.models import Status, StatusEnum
 from tensorflow.keras.layers import BatchNormalization, MaxPool2D, InputLayer
@@ -104,7 +106,7 @@ def get_eval_fn(model):
                                            directory=test_dir,
                                            x_col='images',
                                            y_col='labels',
-                                           class_mode='binary',
+                                           class_mode='categorical',
                                            target_size=IMAGE_SIZE,
                                            color_mode='rgb',
                                            batch_size=BATCH_SIZE)
@@ -114,7 +116,7 @@ def get_eval_fn(model):
     return evaluate
 
 
-class TCFedAvg(fl.server.strategy.FedAvg):
+class TCCifarFedAvg(fl.server.strategy.FedAvg):
 
     def __init__(
             self,
@@ -138,6 +140,8 @@ class TCFedAvg(fl.server.strategy.FedAvg):
         self.id = id
         self.num_rounds = num_rounds
         self.eval_fn = eval_fn
+        data = {"loss":[], "accuracy":[]}
+        self.results = pd.DataFrame(data)
         jobs[self.id] = Status(status=StatusEnum.WAITING)
 
     def aggregate_fit(
@@ -160,9 +164,7 @@ class TCFedAvg(fl.server.strategy.FedAvg):
                 pickle.dump(aggregated_weights, open(f"{path}/aggregated-weights.sav", 'wb'))
                 with open(f"{path}/aggregated-weights.sav", 'rb') as f:
                     try:
-                        r = requests.put(f"{REPOSITORY_ADDRESS}/model/{self.id}/{rnd}", files={"file": f})
-                        r = requests.put(f"{REPOSITORY_ADDRESS}/model/meta/{self.id}/{rnd}",
-                                         json={"meta": {"one": f"{self.num_rounds}", "two": f"{self.id}"}})
+                        pass
                     except requests.exceptions.RequestException as e:
                         print(f"Failed to send weights of job {self.id} to repository")
                         traceback.print_exc()
@@ -182,7 +184,9 @@ class TCFedAvg(fl.server.strategy.FedAvg):
         jobs[self.id] = Status(status=StatusEnum.FINISHED)
         with open(os.path.join("..", JSON_FILE), 'wb') as handle:
             pickle.dump(jobs, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        return super().aggregate_evaluate(rnd, results, failures)
+        results = super().aggregate_evaluate(rnd, results, failures)
+        log(INFO, results)
+        return results
 
 
 class TCIFCA(fl.server.strategy.FedAvg):

@@ -6,7 +6,7 @@ import tensorflow as tf
 from config import FEDERATED_PORT
 from flwr.server.strategy import Strategy
 from pydloc.models import TCTrainingConfiguration
-from src.strategy_manager import TCFedAvg
+from src.strategy_manager import TCCifarFedAvg
 
 from application.src.strategy_manager import get_cnn_model_1, get_eval_fn
 
@@ -19,13 +19,12 @@ def is_port_in_use(port):
 def construct_strategy(id: int, data: TCTrainingConfiguration, model=None) -> Strategy:
     config_fn = get_on_fit_config_fn() if data.strategy == "custom" else None
     if data.strategy == "avg":
-        return TCFedAvg(
+        return TCCifarFedAvg(
             num_rounds=data.num_rounds,
             min_fit_clients=data.min_fit_clients,  # Minimum number of clients to be sampled for the next round
             min_available_clients=data.min_available_clients,
             min_eval_clients=data.min_available_clients,
             on_fit_config_fn=config_fn,
-            eval_fn=get_eval_fn(model),
             id=id)
     elif data.strategy == "fast-and-slow":
         return fl.server.strategy.FastAndSlow(
@@ -93,15 +92,12 @@ def get_on_fit_config_fn() -> Callable[[int], Dict[str, str]]:
 
 
 def start_flower_server(id: int, data: TCTrainingConfiguration):
-    model = get_cnn_model_1((128, 128) + (3,))
-    adam_opt = tf.keras.optimizers.Adam(learning_rate=0.0001, amsgrad=True)
-    metrics = ["accuracy", tf.keras.metrics.Precision(name="precision")]
-    metric_names = ["accuracy", "precision"]
-    model.compile(
-        optimizer=adam_opt,
-        loss=tf.keras.losses.BinaryCrossentropy(),
-        metrics=metrics
-    )
+    model = tf.keras.applications.EfficientNetB0(
+            input_shape=(32, 32, 3), weights=None, classes=10
+        )
+    adam_opt = tf.keras.optimizers.SGD(learning_rate=0.001)
+    model.compile(adam_opt, "sparse_categorical_crossentropy", metrics=[
+            "accuracy"])
     strategy = construct_strategy(id, data, model)
     fl.server.start_server(config={"num_rounds": data.num_rounds},
                            server_address=f"[::]:{FEDERATED_PORT}",
