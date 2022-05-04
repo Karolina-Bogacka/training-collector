@@ -35,6 +35,7 @@ class TCTrainingConfiguration(BaseModel):
     min_fit_clients: int  # Minimum number of clients to be sampled for the next round
     min_available_clients: int
     adapt_config: str
+    num_clusters: int
     config: List[BasicConfiguration]
 
     class Config:

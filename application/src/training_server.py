@@ -6,9 +6,8 @@ import tensorflow as tf
 from config import FEDERATED_PORT
 from flwr.server.strategy import Strategy
 from pydloc.models import TCTrainingConfiguration
-from src.strategy_manager import TCCifarFedAvg
 
-from application.src.strategy_manager import get_cnn_model_1, get_eval_fn
+from application.src.strategy_manager import get_cnn_model_1, get_eval_fn, TCCifarIFCA
 
 
 def is_port_in_use(port):
@@ -19,12 +18,13 @@ def is_port_in_use(port):
 def construct_strategy(id: int, data: TCTrainingConfiguration, model=None) -> Strategy:
     config_fn = get_on_fit_config_fn() if data.strategy == "custom" else None
     if data.strategy == "avg":
-        return TCCifarFedAvg(
+        return TCCifarIFCA(
             num_rounds=data.num_rounds,
             min_fit_clients=data.min_fit_clients,  # Minimum number of clients to be sampled for the next round
             min_available_clients=data.min_available_clients,
             min_eval_clients=data.min_available_clients,
             on_fit_config_fn=config_fn,
+            cluster_number=data.num_clusters,
             id=id)
     elif data.strategy == "fast-and-slow":
         return fl.server.strategy.FastAndSlow(

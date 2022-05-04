@@ -11,6 +11,7 @@ Sample request body for post /job/config/{id}:
 "min_fit_clients" : "6",
 "min_available_clients": "6",
 "adapt_config": "custom",
+"num_clusters": "2", 
 "config":[{
       "config_id" : "min_effort",
       "batch_size": "64",
