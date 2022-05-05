@@ -3,6 +3,7 @@ from logging import INFO
 from typing import List, Tuple, Optional, Callable, Dict
 import os
 import pickle
+import time
 import traceback
 from typing import List, Tuple, Optional, Callable, Dict
 
@@ -121,8 +122,8 @@ class TCCifarFedAvg(fl.server.strategy.FedAvg):
     def __init__(
             self,
             num_rounds: int,
-            fraction_fit: float = 0.1,
-            fraction_eval: float = 0.1,
+            fraction_fit: float = 1,
+            fraction_eval: float = 1,
             min_fit_clients: int = 2,
             min_eval_clients: int = 2,
             min_available_clients: int = 2,
@@ -142,6 +143,8 @@ class TCCifarFedAvg(fl.server.strategy.FedAvg):
         self.eval_fn = eval_fn
         data = {"loss":[], "accuracy":[]}
         self.results = pd.DataFrame(data)
+        self.losses = []
+        self.times = []
         jobs[self.id] = Status(status=StatusEnum.WAITING)
 
     def aggregate_fit(
@@ -151,29 +154,6 @@ class TCCifarFedAvg(fl.server.strategy.FedAvg):
             failures: List[BaseException],
     ) -> Optional[fl.common.Weights]:
         aggregated_weights = super().aggregate_fit(rnd, results, failures)
-        jobs[self.id] = Status(status=StatusEnum.TRAINING)
-        if rnd == self.num_rounds:
-            if aggregated_weights is not None:
-                # Save aggregated_weights
-                print(f"Saving final aggregated_weights...")
-                path = f"model/{self.id}"
-                is_exist = os.path.exists(path)
-                if not is_exist:
-                    # Create a new directory because it does not exist
-                    os.makedirs(path)
-                pickle.dump(aggregated_weights, open(f"{path}/aggregated-weights.sav", 'wb'))
-                with open(f"{path}/aggregated-weights.sav", 'rb') as f:
-                    try:
-                        pass
-                    except requests.exceptions.RequestException as e:
-                        print(f"Failed to send weights of job {self.id} to repository")
-                        traceback.print_exc()
-
-                os.remove(f"{path}/aggregated-weights.sav")
-                os.rmdir(f"{path}")
-            jobs[self.id] = Status(status=StatusEnum.FINISHED, round=rnd)
-        else:
-            jobs[self.id] = Status(status=StatusEnum.TRAINING, round=rnd)
         return aggregated_weights
 
     def aggregate_evaluate(self,
@@ -185,88 +165,13 @@ class TCCifarFedAvg(fl.server.strategy.FedAvg):
         with open(os.path.join("..", JSON_FILE), 'wb') as handle:
             pickle.dump(jobs, handle, protocol=pickle.HIGHEST_PROTOCOL)
         results = super().aggregate_evaluate(rnd, results, failures)
+        with open(os.path.join(os.sep, "code", "application", "results.pkl"),
+                  'wb') as handle:
+            self.losses.append(results[0])
+            self.times.append(time.time())
+            results_to_file = {"loss": self.losses,
+                       "times": self.times}
+            pickle.dump(results_to_file, handle, protocol=pickle.HIGHEST_PROTOCOL)
         log(INFO, results)
         return results
 
-
-class TCIFCA(fl.server.strategy.FedAvg):
-
-    def __init__(
-            self,
-            num_rounds: int,
-            fraction_fit: float = 0.1,
-            fraction_eval: float = 0.1,
-            min_fit_clients: int = 2,
-            min_eval_clients: int = 2,
-            min_available_clients: int = 2,
-            eval_fn: Optional[
-                Callable[[Weights], Optional[Tuple[float, Dict[str, Scalar]]]]] = None,
-            on_fit_config_fn: Optional[Callable[[int], Dict[str, Scalar]]] = None,
-            on_evaluate_config_fn: Optional[Callable[[int], Dict[str, Scalar]]] = None,
-            accept_failures: bool = True,
-            initial_parameters: Optional[Parameters] = None,
-            id: int = -1
-    ) -> None:
-        super().__init__(fraction_fit, fraction_eval, min_fit_clients, min_eval_clients,
-                         min_available_clients, eval_fn, on_fit_config_fn, on_evaluate_config_fn,
-                         accept_failures, initial_parameters)
-        self.id = id
-        self.num_rounds = num_rounds
-        jobs[self.id] = Status(status=StatusEnum.WAITING)
-
-    pass
-
-
-def get_cnn_model_1(input_shape):
-    '''
-    base_model = VGG16(input_shape=(224, 224, 3),  # Shape of our images
-                       include_top=False,  # Leave out the last fully connected layer
-                       weights='imagenet')
-    for layer in base_model.layers:
-        layer.trainable = False
-
-    x = Flatten()(base_model.output)
-
-    # Add a fully connected layer with 512 hidden units and ReLU activation
-    x = Dense(512, activation='relu')(x)
-
-    # Add a dropout rate of 0.5
-    x = Dropout(0.5)(x)
-
-    # Add a final sigmoid layer with 1 node for classification output
-    x = Dense(1, activation='sigmoid')(x)
-
-    model = tf.keras.models.Model(base_model.input, x)
-    '''
-    model = tf.keras.Sequential()
-    model.add(InputLayer(input_shape=(128, 128, 3)))
-    model.add(Conv2D(filters=32, kernel_size=(3, 3), padding='valid', activation='relu'))
-    model.add(BatchNormalization())
-    model.add(MaxPool2D(pool_size=(2, 2), padding='valid'))
-    model.add(Dropout(0.3))
-
-    model.add(Conv2D(filters=64, kernel_size=(3, 3), padding='valid', activation='relu'))
-    model.add(BatchNormalization())
-    model.add(MaxPool2D(pool_size=(2, 2), padding='valid'))
-    model.add(Dropout(0.3))
-
-    model.add(Conv2D(filters=128, kernel_size=(3, 3), padding='valid', activation='relu'))
-    model.add(BatchNormalization())
-    model.add(MaxPool2D(pool_size=(2, 2), padding='valid'))
-    model.add(Dropout(0.3))
-
-    # Adding flatten
-    model.add(Flatten())
-
-    # Adding full connected layer (dense)
-    model.add(Dense(units=512, activation='relu'))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.3))
-
-    model.add(Dense(units=256, activation='relu'))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.3))
-
-    # Adding output layer
-    model.add(Dense(units=1, activation='sigmoid'))
-    return model
