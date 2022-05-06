@@ -1,4 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.8 (trainingCollectorBeta)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.8 (fl-training-collector)" project-jdk-type="Python SDK" />
+  <component name="UnattendedHostPersistenceState">
+    <option name="openedFilesInfos">
+      <list>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="0" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/application/main.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="0" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/README.md" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="0" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/application/Dockerfile" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="413" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/application/src/training_server.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="740" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/application/pydloc/models.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="990" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/application/src/strategy_manager.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="262" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/docker-compose.yml" />
+        </OpenedFileInfo>
+      </list>
+    </option>
+  </component>
 </project>
