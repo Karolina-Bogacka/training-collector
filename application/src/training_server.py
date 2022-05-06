@@ -8,7 +8,6 @@ from flwr.server.strategy import Strategy
 from pydloc.models import TCTrainingConfiguration
 from src.strategy_manager import TCCifarFedAvg
 
-from application.src.strategy_manager import get_cnn_model_1, get_eval_fn
 
 
 def is_port_in_use(port):
