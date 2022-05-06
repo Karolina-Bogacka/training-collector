@@ -203,9 +203,9 @@ class TCCifarIFCA(fl.server.strategy.FedAvg):
             num_rounds: int,
             fraction_fit: float = 1,
             fraction_eval: float = 1,
-            min_fit_clients: int = 4,
-            min_eval_clients: int = 4,
-            min_available_clients: int = 4,
+            min_fit_clients: int = 12,
+            min_eval_clients: int = 12,
+            min_available_clients: int = 12,
             eval_fn: Optional[
                 Callable[[Weights], Optional[Tuple[float, Dict[str, Scalar]]]]] = None,
             on_fit_config_fn: Optional[Callable[[int], Dict[str, Scalar]]] = None,
