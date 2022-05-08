@@ -18,6 +18,22 @@ from flwr.server.client_proxy import ClientProxy
 from pydloc.models import Status, StatusEnum
 from tensorflow.keras.layers import BatchNormalization, MaxPool2D, InputLayer
 from tensorflow.keras.layers import Conv2D, Dropout, Flatten, Dense
+import flwr as fl
+import os
+import gc
+import pandas as pd
+import numpy as np
+from flwr.client import start_numpy_client
+from flwr.common.logger import log
+from keras import backend, Sequential
+from keras.constraints import maxnorm
+from keras.datasets.cifar import load_batch
+from keras.layers import MaxPooling2D
+from tensorflow.keras.optimizers import SGD
+from keras.utils import np_utils
+from starlette.concurrency import run_in_threadpool
+from tensorflow.keras.layers import Conv2D, Dropout, Flatten, Dense
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 #from tensorflow.keras.applications.vgg16 import VGG16
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
@@ -145,6 +161,33 @@ class TCCifarFedAvg(fl.server.strategy.FedAvg):
         self.results = pd.DataFrame(data)
         self.losses = []
         self.times = []
+        self.model = Sequential()
+        self.model.add(Conv2D(32, (3, 3), input_shape=(32, 32, 3), activation='relu',
+                              padding='same'))
+        self.model.add(Dropout(0.2))
+        self.model.add(Conv2D(32, (3, 3), activation='relu', padding='same'))
+        self.model.add(MaxPooling2D(pool_size=(2, 2)))
+        self.model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
+        self.model.add(Dropout(0.2))
+        self.model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
+        self.model.add(MaxPooling2D(pool_size=(2, 2)))
+        self.model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
+        self.model.add(Dropout(0.2))
+        self.model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
+        self.model.add(MaxPooling2D(pool_size=(2, 2)))
+        self.model.add(Flatten())
+        self.model.add(Dropout(0.2))
+        self.model.add(Dense(1024, activation='relu', kernel_constraint=maxnorm(3)))
+        self.model.add(Dropout(0.2))
+        self.model.add(Dense(512, activation='relu', kernel_constraint=maxnorm(3)))
+        self.model.add(Dropout(0.2))
+        self.model.add(Dense(10, activation='softmax'))
+        lrate = 0.01
+        decay = lrate / 50
+        sgd = SGD(lr=lrate, momentum=0.9, decay=decay, nesterov=False)
+        self.model.compile(loss='categorical_crossentropy', optimizer=sgd,
+                           metrics=['accuracy'])
+
         jobs[self.id] = Status(status=StatusEnum.WAITING)
 
     def aggregate_fit(
@@ -154,6 +197,7 @@ class TCCifarFedAvg(fl.server.strategy.FedAvg):
             failures: List[BaseException],
     ) -> Optional[fl.common.Weights]:
         aggregated_weights = super().aggregate_fit(rnd, results, failures)
+        self.model.set_weights(parameters_to_weights(aggregated_weights[0]))
         return aggregated_weights
 
     def aggregate_evaluate(self,
@@ -172,6 +216,7 @@ class TCCifarFedAvg(fl.server.strategy.FedAvg):
             results_to_file = {"loss": self.losses,
                        "times": self.times}
             pickle.dump(results_to_file, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            self.model.save("/code/application/model")
         log(INFO, results)
         return results
 
