@@ -141,7 +141,7 @@ class TCCifarFedAvg(fl.server.strategy.FedAvg):
         self.id = id
         self.num_rounds = num_rounds
         self.eval_fn = eval_fn
-        data = {"loss":[], "accuracy":[]}
+        data = {"loss": [], "accuracy": []}
         self.results = pd.DataFrame(data)
         self.losses = []
         self.times = []

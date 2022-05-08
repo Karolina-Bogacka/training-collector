@@ -11,7 +11,7 @@ services:
       - "8080:8080"
     volumes:
       - type: bind
-        source: /home/wasielk/federated-experiments/fl-local-operations/data
+        source: /Users/karolinabogacka/PycharmProjects/fl-local-operations/data
         target: /data
 
 networks:
