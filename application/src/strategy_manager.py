@@ -37,6 +37,8 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 #from tensorflow.keras.applications.vgg16 import VGG16
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
+from application.src.custom_strategy import CustomFedAvg
+
 if os.path.isfile(os.path.join("..", JSON_FILE)):
     with open(os.path.join("..", JSON_FILE), 'rb') as handle:
         jobs = pickle.load(handle)
@@ -47,7 +49,7 @@ ERAS = 50
 EPOCHS = 1
 SEED = 42
 BATCH_SIZE = 16
-IMAGE_SIZE = (128, 128)
+IMAGE_SIZE = (32, 32)
 PREFETCH_BUFFER_SIZE = 400
 SHUFFLE_BUFFER_SIZE = 1000
 CACHE_DIR = "caches/ds_cache"
@@ -62,78 +64,7 @@ ds_params = dict(
 )
 
 
-def load_image(path):
-    image = tf.io.decode_bmp(tf.io.read_file(path), channels=3)
-    return image
-
-
-def preprocess(image):
-    result = tf.image.resize(image, (128, 128))
-    result = tf.image.per_image_standardization(result)
-    return result
-
-
-def get_ds(filenames, labels, batch_size, pref_buf_size):
-    AUTOTUNE = tf.data.experimental.AUTOTUNE
-    label_ds, image_pathes = tf.data.Dataset.from_tensor_slices(labels), tf.data.Dataset.from_tensor_slices(filenames)
-    images_ds = image_pathes.map(load_image, AUTOTUNE).map(preprocess, AUTOTUNE)
-    ds = tf.data.Dataset.zip((images_ds, label_ds)).batch(batch_size).prefetch(pref_buf_size)
-    return ds
-
-
-def test_model(model, callbacks=None):
-    test_dir = os.path.join(os.sep, 'data', "validation_data")
-    test_data_csv = pd.read_csv(
-        test_dir + "/C-NMC_test_prelim_phase_data_labels.csv"
-    )
-    test_data_dir = test_dir + "/C-NMC_test_prelim_phase_data_labels.csv"
-    dir_list = list(os.walk(test_data_dir))[0]
-    filenames = sorted([test_data_dir + "/" + name for name in dir_list[2]])
-    get_label_by_name = lambda x: test_data_csv.loc[test_data_csv['new_names'] == x]["labels"].to_list()[0]
-    labels = [1 - get_label_by_name(name) for name in dir_list[2]]
-    # print(filenames)
-    # print(test_data_csv[["new_names", "labels"]])
-    test_ds = get_ds(filenames, labels, BATCH_SIZE, PREFETCH_BUFFER_SIZE)
-    if callbacks == None:
-        loss, accuracy, precision = model.evaluate(test_ds)
-    else:
-        loss, accuracy, precision = model.evaluate(test_ds, callbacks=callbacks)
-
-    return loss, {'accuracy': accuracy, 'precision': precision}
-
-
-def get_eval_fn(model):
-    """Return an evaluation function for server-side evaluation."""
-    test_dir = os.path.join(os.sep, 'data', "validation_data")
-    test_data_csv = pd.read_csv(
-        test_dir + "/C-NMC_test_prelim_phase_data_labels.csv"
-    )
-    test_data_dir = test_dir + "/C-NMC_test_prelim_phase_data"
-    dir_list = list(os.walk(test_data_dir))[0]
-    filenames = sorted([test_data_dir + "/" + name for name in dir_list[2]])
-    get_label_by_name = lambda x: test_data_csv.loc[test_data_csv['new_names'] == x]["labels"].to_list()[0]
-    labels = [str(1 - get_label_by_name(name)) for name in dir_list[2]]
-    idg = ImageDataGenerator()
-    df = pd.DataFrame({'images': filenames, 'labels': labels})
-
-    # The `evaluate` function will be called after every round
-    def evaluate(weights: fl.common.Weights) -> Optional[Tuple[float, float]]:
-        model.set_weights(weights)  # Update model with the latest parameters
-        test_gen = idg.flow_from_dataframe(dataframe=df,
-                                           directory=test_dir,
-                                           x_col='images',
-                                           y_col='labels',
-                                           class_mode='categorical',
-                                           target_size=IMAGE_SIZE,
-                                           color_mode='rgb',
-                                           batch_size=BATCH_SIZE)
-        loss, accuracy, precision = model.evaluate(test_gen, steps=len(filenames) // BATCH_SIZE)
-        return (loss, {'accuracy': accuracy, 'precision': precision})
-
-    return evaluate
-
-
-class TCCifarFedAvg(fl.server.strategy.FedAvg):
+class TCCifarFedAvg(CustomFedAvg):
 
     def __init__(
             self,
@@ -148,7 +79,7 @@ class TCCifarFedAvg(fl.server.strategy.FedAvg):
             on_fit_config_fn: Optional[Callable[[int], Dict[str, Scalar]]] = None,
             on_evaluate_config_fn: Optional[Callable[[int], Dict[str, Scalar]]] = None,
             accept_failures: bool = True,
-            initial_parameters: Optional[Parameters] = None,
+            initial_parameters = None,
             id: int = -1
     ) -> None:
         super().__init__(fraction_fit, fraction_eval, min_fit_clients, min_eval_clients,

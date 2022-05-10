@@ -8,9 +8,10 @@ Sample request body for post /job/config/{id}:
 "strategy" : "avg",
 "model_id" : "base",
 "num_rounds" : "50",
-"min_fit_clients" : "6",
-"min_available_clients": "6",
+"min_fit_clients" : "8",
+"min_available_clients": "8",
 "adapt_config": "custom",
+"timeout":"1080",
 "config":[{
       "config_id" : "min_effort",
       "batch_size": "64",

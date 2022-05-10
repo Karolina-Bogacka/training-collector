@@ -28,12 +28,12 @@ class Status(BaseModel):
 
 
 class TCTrainingConfiguration(BaseModel):
-    # TODO: add more optional parameters here in order to be able to customize all strategies
     strategy: str
     model_id: str
     num_rounds: int
     min_fit_clients: int  # Minimum number of clients to be sampled for the next round
     min_available_clients: int
+    timeout: int
     adapt_config: str
     config: List[BasicConfiguration]
 

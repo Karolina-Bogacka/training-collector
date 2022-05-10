@@ -6,8 +6,10 @@ import tensorflow as tf
 from config import FEDERATED_PORT
 from flwr.server.strategy import Strategy
 from pydloc.models import TCTrainingConfiguration
+from flwr.server.client_manager import SimpleClientManager
 from src.strategy_manager import TCCifarFedAvg
 
+from application.src.custom_server import TimeoutServer
 
 
 def is_port_in_use(port):
@@ -22,7 +24,7 @@ def construct_strategy(id: int, data: TCTrainingConfiguration, model=None) -> St
             num_rounds=data.num_rounds,
             min_fit_clients=data.min_fit_clients,  # Minimum number of clients to be sampled for the next round
             min_available_clients=data.min_available_clients,
-            min_eval_clients=data.min_available_clients,
+            min_eval_clients=data.min_fit_clients,
             on_fit_config_fn=config_fn,
             id=id)
     elif data.strategy == "fast-and-slow":
@@ -91,13 +93,9 @@ def get_on_fit_config_fn() -> Callable[[int], Dict[str, str]]:
 
 
 def start_flower_server(id: int, data: TCTrainingConfiguration):
-    model = tf.keras.applications.EfficientNetB0(
-            input_shape=(32, 32, 3), weights=None, classes=10
-        )
-    adam_opt = tf.keras.optimizers.SGD(learning_rate=0.001)
-    model.compile(adam_opt, "sparse_categorical_crossentropy", metrics=[
-            "accuracy"])
-    strategy = construct_strategy(id, data, model)
+    strategy = construct_strategy(id, data)
+    server = TimeoutServer(client_manager=SimpleClientManager(), strategy=strategy, timeout=data.timeout)
     fl.server.start_server(config={"num_rounds": data.num_rounds},
                            server_address=f"[::]:{FEDERATED_PORT}",
+                           server=server,
                            strategy=strategy)
