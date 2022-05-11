@@ -5,7 +5,7 @@
     <option name="openedFilesInfos">
       <list>
         <OpenedFileInfo>
-          <option name="caretOffset" value="0" />
+          <option name="caretOffset" value="619" />
           <option name="fileUrl" value="file://$PROJECT_DIR$/application/main.py" />
         </OpenedFileInfo>
         <OpenedFileInfo>
@@ -17,20 +17,24 @@
           <option name="fileUrl" value="file://$PROJECT_DIR$/application/Dockerfile" />
         </OpenedFileInfo>
         <OpenedFileInfo>
-          <option name="caretOffset" value="413" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/application/src/training_server.py" />
+          <option name="caretOffset" value="142" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/docker-compose.yml" />
         </OpenedFileInfo>
         <OpenedFileInfo>
-          <option name="caretOffset" value="740" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/application/pydloc/models.py" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="990" />
+          <option name="caretOffset" value="5695" />
           <option name="fileUrl" value="file://$PROJECT_DIR$/application/src/strategy_manager.py" />
         </OpenedFileInfo>
         <OpenedFileInfo>
-          <option name="caretOffset" value="262" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/docker-compose.yml" />
+          <option name="caretOffset" value="0" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/application/config.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="4356" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/application/src/custom_strategy.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="1066" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/application/src/training_server.py" />
         </OpenedFileInfo>
       </list>
     </option>
