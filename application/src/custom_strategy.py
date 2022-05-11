@@ -1,3 +1,4 @@
+import random
 from logging import INFO
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -35,7 +36,8 @@ class CustomFedAvg(Strategy):
         on_fit_config_fn: Optional[Callable[[int], Dict[str, Scalar]]] = None,
         on_evaluate_config_fn: Optional[Callable[[int], Dict[str, Scalar]]] = None,
         accept_failures: bool = True,
-        initial_parameters = None
+        initial_parameters = None,
+            blacklisted = 0
     ) -> None:
         """Federated Averaging strategy.
         Implementation based on https://arxiv.org/abs/1602.05629
@@ -70,6 +72,8 @@ class CustomFedAvg(Strategy):
         self.on_evaluate_config_fn = on_evaluate_config_fn
         self.accept_failures = accept_failures
         self.initial_parameters = initial_parameters
+        self.blacklisted = blacklisted
+        self.blacklist = []
         self.round = 0
 
     def initialize_parameters(
@@ -127,6 +131,7 @@ class CustomFedAvg(Strategy):
         config = {}
         if self.round == 0:
             client_manager.wait_for(self.min_available_clients)
+
         if self.on_fit_config_fn is not None:
             # Custom fit config function provided
             config = self.on_fit_config_fn(rnd)
@@ -140,6 +145,13 @@ class CustomFedAvg(Strategy):
         clients = client_manager.sample(
             num_clients=sample_size, min_num_clients=min_num_clients
         )
+        if self.blacklisted > 0:
+            if self.round == 0:
+                # form the blacklist by sampling n clients
+                self.blacklist = random.sample(clients, self.blacklisted)
+            if self.round % 2 == 0:
+                clients = [client for client in clients if client not in self.blacklist]
+        log(INFO, f"Blacklisted {self.blacklist} from clients {clients}")
         self.round += 1
         # Return client/config pairs
         return [(client, fit_ins) for client in clients]

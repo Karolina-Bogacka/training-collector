@@ -80,11 +80,12 @@ class TCCifarFedAvg(CustomFedAvg):
             on_evaluate_config_fn: Optional[Callable[[int], Dict[str, Scalar]]] = None,
             accept_failures: bool = True,
             initial_parameters = None,
-            id: int = -1
+            id: int = -1,
+            blacklisted: int = 0
     ) -> None:
         super().__init__(fraction_fit, fraction_eval, min_fit_clients, min_eval_clients,
                          min_available_clients, eval_fn, on_fit_config_fn, on_evaluate_config_fn,
-                         accept_failures, initial_parameters)
+                         accept_failures, initial_parameters, blacklisted)
         self.id = id
         self.num_rounds = num_rounds
         self.eval_fn = eval_fn
