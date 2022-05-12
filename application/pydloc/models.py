@@ -35,6 +35,7 @@ class TCTrainingConfiguration(BaseModel):
     min_available_clients: int
     timeout: int
     adapt_config: str
+    blacklisted: int
     config: List[BasicConfiguration]
 
     class Config:

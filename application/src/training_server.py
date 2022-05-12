@@ -26,6 +26,7 @@ def construct_strategy(id: int, data: TCTrainingConfiguration, model=None) -> St
             min_available_clients=data.min_available_clients,
             min_eval_clients=data.min_fit_clients,
             on_fit_config_fn=config_fn,
+            blacklisted=int(data.blacklisted),
             id=id)
     elif data.strategy == "fast-and-slow":
         return fl.server.strategy.FastAndSlow(
