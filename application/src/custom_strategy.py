@@ -1,5 +1,5 @@
 import random
-from logging import INFO
+from logging import INFO, DEBUG
 from typing import Callable, Dict, List, Optional, Tuple
 
 from flwr.common import (
@@ -74,6 +74,7 @@ class CustomFedAvg(Strategy):
         self.initial_parameters = initial_parameters
         self.blacklisted = blacklisted
         self.blacklist = []
+        self.weights = {}
         self.round = 0
 
     def initialize_parameters(
@@ -126,7 +127,7 @@ class CustomFedAvg(Strategy):
 
     def configure_fit(
         self, rnd: int, parameters: Parameters, client_manager: ClientManager
-    ) -> List[Tuple[ClientProxy, FitIns]]:
+    , client=None) -> List[Tuple[ClientProxy, FitIns]]:
         """Configure the next round of training."""
         config = {}
         if self.round == 0:
@@ -145,16 +146,22 @@ class CustomFedAvg(Strategy):
         clients = client_manager.sample(
             num_clients=sample_size, min_num_clients=min_num_clients
         )
+        to_fit = [(client, fit_ins) for client in clients]
         if self.blacklisted > 0:
             if self.round == 0:
                 # form the blacklist by sampling n clients
                 self.blacklist = random.sample(clients, self.blacklisted)
-            if self.round % 2 == 0:
-                clients = [client for client in clients if client not in self.blacklist]
+                self.weights = {client: parameters_to_weights(parameters) for client in
+                                self.blacklist}
+            if self.round % 2 == 1:
+                to_fit = [(client, fit_ins) if client not in
+                          self.blacklist else (client, FitIns(weights_to_parameters(
+                    self.weights[client]),config)) for client in clients]
         log(INFO, f"Blacklisted {self.blacklist} from clients {clients}")
         self.round += 1
+        # update weights so that they have the old available parameters
         # Return client/config pairs
-        return [(client, fit_ins) for client in clients]
+        return to_fit
 
     def configure_evaluate(
         self, rnd: int, parameters: Parameters, client_manager: ClientManager
@@ -199,10 +206,22 @@ class CustomFedAvg(Strategy):
         if not self.accept_failures and failures:
             return None, {}
         # Convert results
+        if self.blacklisted > 0:
+            log(DEBUG,"Performing blacklist")
+            for result in results:
+                if result[0] in self.blacklist:
+                    log(DEBUG, f"{result[0]} in blacklist")
+                    self.weights[result[0]] = parameters_to_weights(result[1].parameters)
+            if self.round % 2 == 1:
+                for result in results:
+                    if result[0] in self.blacklist:
+                        results.remove(result)
+                #log(DEBUG, f"Final results {results}")
         weights_results = [
             (parameters_to_weights(fit_res.parameters), fit_res.num_examples)
             for client, fit_res in results
         ]
+
         return weights_to_parameters(aggregate(weights_results)), {}
 
     def aggregate_evaluate(
