@@ -37,6 +37,8 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 #from tensorflow.keras.applications.vgg16 import VGG16
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
+from application.src.custom_strategy import CustomFedAvg
+
 if os.path.isfile(os.path.join("..", JSON_FILE)):
     with open(os.path.join("..", JSON_FILE), 'rb') as handle:
         jobs = pickle.load(handle)
@@ -63,7 +65,7 @@ ds_params = dict(
 
 
 
-class TCCifarFedAvg(fl.server.strategy.FedAvg):
+class TCCifarFedAvg(CustomFedAvg):
 
     def __init__(
             self,
@@ -84,7 +86,7 @@ class TCCifarFedAvg(fl.server.strategy.FedAvg):
     ) -> None:
         super().__init__(fraction_fit, fraction_eval, min_fit_clients, min_eval_clients,
                          min_available_clients, eval_fn, on_fit_config_fn, on_evaluate_config_fn,
-                         accept_failures, initial_parameters)
+                         accept_failures, initial_parameters, blacklisted=blacklisted)
         self.id = id
         self.num_rounds = num_rounds
         self.eval_fn = eval_fn
