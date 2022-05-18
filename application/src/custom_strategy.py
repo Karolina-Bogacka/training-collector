@@ -220,7 +220,6 @@ class CustomFedAvg(Strategy):
             (parameters_to_weights(fit_res.parameters), fit_res.num_examples)
             for client, fit_res in results
         ]
-        self.round += 1
         return weights_to_parameters(aggregate(weights_results)), {}
 
     def aggregate_evaluate(
@@ -245,4 +244,5 @@ class CustomFedAvg(Strategy):
                 for _, evaluate_res in results
             ]
         )
+        self.round += 1
         return loss_aggregated, {}

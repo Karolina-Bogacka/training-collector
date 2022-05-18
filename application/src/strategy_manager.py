@@ -91,9 +91,18 @@ class TCCifarFedAvg(CustomFedAvg):
         self.num_rounds = num_rounds
         self.eval_fn = eval_fn
         data = {"loss":[], "accuracy":[]}
+        (self.x_train, self.y_train), (self.x_test, self.y_test) = \
+            tf.keras.datasets.cifar10.load_data()
+        self.x_train = self.x_train.astype('float32')
+        self.x_test = self.x_test.astype('float32')
+        self.x_train = self.x_train / 255.0
+        self.x_test = self.x_test / 255.0
+        self.y_train = np_utils.to_categorical(self.y_train)
+        self.y_test = np_utils.to_categorical(self.y_test)
         self.results = pd.DataFrame(data)
         self.losses = []
         self.times = []
+        self.evaluated = []
         self.model = Sequential()
         self.model.add(Conv2D(32, (3, 3), input_shape=(32, 32, 3), activation='relu',
                               padding='same'))
@@ -146,8 +155,10 @@ class TCCifarFedAvg(CustomFedAvg):
                   'wb') as handle:
             self.losses.append(results[0])
             self.times.append(time.time())
+            losses, accuracy = self.model.evaluate(self.x_test, self.y_test, 32)
+            self.evaluated.append((losses, accuracy))
             results_to_file = {"loss": self.losses,
-                       "times": self.times}
+                       "times": self.times, "evaluate":self.evaluated}
             pickle.dump(results_to_file, handle, protocol=pickle.HIGHEST_PROTOCOL)
             self.model.save("/code/application/model")
         log(INFO, results)
