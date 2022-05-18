@@ -1,4 +1,4 @@
-FROM python:3.8.3-slim-buster
+FROM tensorflow/tensorflow
 WORKDIR /code
 COPY requirements.txt /code/requirements.txt
 RUN apt-get update && apt-get -y install iproute2

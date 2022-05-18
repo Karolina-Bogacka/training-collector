@@ -1,5 +1,6 @@
 import traceback
-from logging import INFO, WARNING
+from logging import INFO, WARNING, DEBUG
+from random import random
 from typing import List, Tuple, Optional, Callable, Dict
 import os
 import pickle
@@ -16,16 +17,19 @@ from flwr.common import Weights, Scalar, Parameters, EvaluateRes, parameters_to_
 from flwr.common.logger import log
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
-from flwr.server.strategy.fedavg import WARNING_MIN_AVAILABLE_CLIENTS_TOO_LOW
+from flwr.server.strategy.fedavg import WARNING_MIN_AVAILABLE_CLIENTS_TOO_LOW, FedAvg
 from keras import Sequential
 from keras.constraints import maxnorm
 from keras.layers import MaxPooling2D
+from keras.utils import np_utils
 from tensorflow.keras.optimizers import SGD
 from pydloc.models import Status, StatusEnum
 from tensorflow.keras.layers import BatchNormalization, MaxPool2D, InputLayer
 from tensorflow.keras.layers import Conv2D, Dropout, Flatten, Dense
 #from tensorflow.keras.applications.vgg16 import VGG16
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+from application.src.custom_strategy import CustomFedAvg
 
 if os.path.isfile(os.path.join("..", JSON_FILE)):
     with open(os.path.join("..", JSON_FILE), 'rb') as handle:
@@ -196,7 +200,7 @@ class TCCifarFedAvg(fl.server.strategy.FedAvg):
         return results
 
 
-class TCCifarIFCA(fl.server.strategy.FedAvg):
+class TCCifarIFCA(CustomFedAvg):
 
     def __init__(
             self,
@@ -213,14 +217,15 @@ class TCCifarIFCA(fl.server.strategy.FedAvg):
             accept_failures: bool = True,
             initial_parameters: Optional[Parameters] = None,
             id: int = -1,
-            local_epochs: int = 10,
+            local_epochs: int = 16,
             cluster_number: int = 2,
+            blacklisted:int=1,
 
     ) -> None:
         super().__init__(fraction_fit, fraction_eval, min_fit_clients, min_eval_clients,
                          min_available_clients, eval_fn, on_fit_config_fn,
                          on_evaluate_config_fn,
-                         accept_failures, initial_parameters)
+                         accept_failures, initial_parameters, blacklisted=blacklisted)
         self.id = id
         if (
                 min_fit_clients > min_available_clients
@@ -232,6 +237,14 @@ class TCCifarIFCA(fl.server.strategy.FedAvg):
         self.cluster_number = cluster_number
         self.clients = {}
         self.cid_maxes = {}
+        (self.x_train, self.y_train), (self.x_test, self.y_test) = \
+            tf.keras.datasets.cifar10.load_data()
+        self.x_train = self.x_train.astype('float32')
+        self.x_test = self.x_test.astype('float32')
+        self.x_train = self.x_train / 255.0
+        self.x_test = self.x_test / 255.0
+        self.y_train = np_utils.to_categorical(self.y_train)
+        self.y_test = np_utils.to_categorical(self.y_test)
         jobs[self.id] = Status(status=StatusEnum.WAITING)
         self.model = Sequential()
         self.model.add(Conv2D(32, (3, 3), input_shape=(32, 32, 3), activation='relu',
@@ -261,8 +274,11 @@ class TCCifarIFCA(fl.server.strategy.FedAvg):
                            metrics=['accuracy'])
         self.models = [self.model.get_weights() for _ in
                        range(self.cluster_number)]
-        self.cluster_results = [[] for _ in range(self.cluster_number)]
+        self.cluster_results = [[[]*self.num_rounds] for _ in range(self.cluster_number)]
         self.current_epoch = 0
+        self.blacklisted=blacklisted
+        self.blacklist = []
+        self.weights = {}
 
     def configure_fit(
             self, rnd: int, parameters: Parameters, client_manager: ClientManager
@@ -277,6 +293,14 @@ class TCCifarIFCA(fl.server.strategy.FedAvg):
         )
         if self.current_epoch < self.local_epochs:
             self.clients = {}
+            if self.blacklisted > 0:
+                if rnd == 0:
+                    # form the blacklist by sampling n clients
+                    cids = [client.cid[0:-5] for client in clients]
+                    to_blacklist = random.sample(cids, self.blacklisted)
+                    self.blacklist = [client for client in clients if client.cid[0:-5] in
+                                      to_blacklist]
+            log(INFO, f"Blacklisted {self.blacklist} from clients {clients}")
             for client in clients:
                 common_cid = client.cid[0:-5]
                 if common_cid not in self.clients:
@@ -296,6 +320,11 @@ class TCCifarIFCA(fl.server.strategy.FedAvg):
                               "local_epochs": self.local_epochs}
                 fit_ins = FitIns(weights_to_parameters(self.models[self.clients[
                     common_cid]]), config)
+                if client in self.blacklist:
+                    if rnd % 2 == 1:
+                        fit_ins = self.weights[client]
+                    else:
+                        self.weights[client] = fit_ins
                 to_send.append((client, fit_ins))
                 log(INFO, f"Current cid client code is {client.cid}")
         else:
@@ -334,6 +363,16 @@ class TCCifarIFCA(fl.server.strategy.FedAvg):
 
         # Divide results between existing clusters
         cluster_results = [[] for _ in range(self.cluster_number)]
+        if self.blacklisted > 0:
+            log(DEBUG,"Performing blacklist")
+            for result in results:
+                if result[0] in self.blacklist:
+                    log(DEBUG, f"{result[0]} in blacklist")
+                    self.weights[result[0]][0] = parameters_to_weights(result[1].parameters)
+            if rnd % 2 == 1:
+                for result in results:
+                    if result[0] in self.blacklist:
+                        results.remove(result)
         for result in results:
             if result[1].metrics["clustering_phase"]:
                 if not result[1].metrics["failure"]:
@@ -402,67 +441,14 @@ class TCCifarIFCA(fl.server.strategy.FedAvg):
             cluster_results[cluster_index].append(result)
         for i in range(self.cluster_number):
             if cluster_results[i]:
-                eval_results = super().aggregate_evaluate(rnd,
-                                                                   cluster_results[i],
-                                                               [])
+                self.model.set_weights(self.models[i])
+                losses, accuracy = self.model.evaluate(self.x_test, self.y_test, 32)
+                eval_results = super().aggregate_evaluate(rnd,cluster_results[i],[])
+                eval_results = eval_results+(losses,accuracy)
                 log(INFO, f"Current eval results {eval_results}")
-                self.cluster_results[i].append(eval_results)
+                self.cluster_results[i][rnd] = eval_results
+                self.model.save(os.path.join(os.sep, "code", "application", "model",
+                                             f"cluster-{i}"))
         with open(os.path.join(os.sep, "code", "application", "results.pkl"),'wb') as handle:
             pickle.dump(self.cluster_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
         return super().aggregate_evaluate(rnd, results, failures)
-
-
-
-def get_cnn_model_1(input_shape):
-    '''
-    base_model = VGG16(input_shape=(224, 224, 3),  # Shape of our images
-                       include_top=False,  # Leave out the last fully connected layer
-                       weights='imagenet')
-    for layer in base_model.layers:
-        layer.trainable = False
-
-    x = Flatten()(base_model.output)
-
-    # Add a fully connected layer with 512 hidden units and ReLU activation
-    x = Dense(512, activation='relu')(x)
-
-    # Add a dropout rate of 0.5
-    x = Dropout(0.5)(x)
-
-    # Add a final sigmoid layer with 1 node for classification output
-    x = Dense(1, activation='sigmoid')(x)
-
-    model = tf.keras.models.Model(base_model.input, x)
-    '''
-    model = tf.keras.Sequential()
-    model.add(InputLayer(input_shape=(128, 128, 3)))
-    model.add(Conv2D(filters=32, kernel_size=(3, 3), padding='valid', activation='relu'))
-    model.add(BatchNormalization())
-    model.add(MaxPool2D(pool_size=(2, 2), padding='valid'))
-    model.add(Dropout(0.3))
-
-    model.add(Conv2D(filters=64, kernel_size=(3, 3), padding='valid', activation='relu'))
-    model.add(BatchNormalization())
-    model.add(MaxPool2D(pool_size=(2, 2), padding='valid'))
-    model.add(Dropout(0.3))
-
-    model.add(Conv2D(filters=128, kernel_size=(3, 3), padding='valid', activation='relu'))
-    model.add(BatchNormalization())
-    model.add(MaxPool2D(pool_size=(2, 2), padding='valid'))
-    model.add(Dropout(0.3))
-
-    # Adding flatten
-    model.add(Flatten())
-
-    # Adding full connected layer (dense)
-    model.add(Dense(units=512, activation='relu'))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.3))
-
-    model.add(Dense(units=256, activation='relu'))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.3))
-
-    # Adding output layer
-    model.add(Dense(units=1, activation='sigmoid'))
-    return model
