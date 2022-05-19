@@ -131,7 +131,7 @@ class CustomFedAvg(Strategy):
     , client=None) -> List[Tuple[ClientProxy, FitIns]]:
         """Configure the next round of training."""
         config = {}
-        if self.round == 0 and self.clustered == 0:
+        if rnd == 0 and self.clustered == 0:
             client_manager.wait_for(self.min_available_clients)
 
         if self.on_fit_config_fn is not None:

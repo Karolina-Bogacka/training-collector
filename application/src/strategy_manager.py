@@ -1,13 +1,16 @@
 import traceback
 from logging import INFO, WARNING, DEBUG
-from random import random
+import random
 from typing import List, Tuple, Optional, Callable, Dict
 import os
 import pickle
+from keras import backend
+from keras.datasets.cifar import load_batch
 import traceback
 from typing import List, Tuple, Optional, Callable, Dict
 
 import flwr as fl
+import numpy as np
 import pandas as pd
 import requests
 import tensorflow as tf
@@ -126,6 +129,44 @@ def get_eval_fn(model):
 
     return evaluate
 
+def load_data():
+    path = os.path.join(os.sep, "cifar-10-batches-py")
+    num_train_samples = 50000
+
+    x_train = np.empty((num_train_samples, 3, 32, 32), dtype='uint8')
+    y_train = np.empty((num_train_samples,), dtype='uint8')
+
+    for i in range(1, 6):
+        fpath = os.path.join(path, 'data_batch_' + str(i))
+        (x_train[(i - 1) * 10000:i * 10000, :, :, :],
+         y_train[(i - 1) * 10000:i * 10000]) = load_batch(fpath)
+
+    fpath = os.path.join(path, 'test_batch')
+    x_test, y_test = load_batch(fpath)
+
+    y_train = np.reshape(y_train, (len(y_train), 1))
+    y_test = np.reshape(y_test, (len(y_test), 1))
+
+    if backend.image_data_format() == 'channels_last':
+        x_train = x_train.transpose(0, 2, 3, 1)
+        x_test = x_test.transpose(0, 2, 3, 1)
+
+    x_test = x_test.astype(x_train.dtype)
+    y_test = y_test.astype(y_train.dtype)
+    return (x_train, y_train), (x_test, y_test)
+
+
+def load_partition(idx: int):
+    """Load 1/10th of the training and test data to simulate a partition."""
+    (x_train, y_train), (x_test, y_test) = load_data()
+    return (
+        x_train[idx * 6250 : (idx + 1) * 6250],
+        y_train[idx * 6250 : (idx + 1) * 6250],
+    ), (
+        x_test[idx * 1250 : (idx + 1) * 1250],
+        y_test[idx * 1250 : (idx + 1) * 1250],
+    )
+
 
 class TCCifarFedAvg(fl.server.strategy.FedAvg):
 
@@ -237,8 +278,7 @@ class TCCifarIFCA(CustomFedAvg):
         self.cluster_number = cluster_number
         self.clients = {}
         self.cid_maxes = {}
-        (self.x_train, self.y_train), (self.x_test, self.y_test) = \
-            tf.keras.datasets.cifar10.load_data()
+        (self.x_train, self.y_train), (self.x_test, self.y_test) = load_data()
         self.x_train = self.x_train.astype('float32')
         self.x_test = self.x_test.astype('float32')
         self.x_train = self.x_train / 255.0
@@ -274,17 +314,39 @@ class TCCifarIFCA(CustomFedAvg):
                            metrics=['accuracy'])
         self.models = [self.model.get_weights() for _ in
                        range(self.cluster_number)]
-        self.cluster_results = [[[]*self.num_rounds] for _ in range(self.cluster_number)]
+        self.cluster_results = [[0]*self.num_rounds for _ in range(self.cluster_number)]
         self.current_epoch = 0
         self.blacklisted=blacklisted
         self.blacklist = []
         self.weights = {}
+
+    def num_fit_clients(self, num_available_clients: int) -> Tuple[int, int]:
+        """Return the sample size and the required number of available
+        clients."""
+        num_clients = int(num_available_clients * self.fraction_fit)
+        log(INFO, f"Sample in round {self.round} {num_clients}")
+        log(INFO, f" {self.min_available_clients} {self.min_fit_clients}")
+        if self.round == 0:
+            return max(num_clients, self.min_fit_clients), self.min_available_clients
+        else:
+            return max(num_clients, self.min_fit_clients), self.min_fit_clients
+
+    def num_evaluation_clients(self, num_available_clients: int) -> Tuple[int, int]:
+        """Use a fraction of available clients for evaluation."""
+        num_clients = int(num_available_clients * self.fraction_eval)
+        log(INFO, f"Sample in round {self.round} {num_clients}")
+        log(INFO, f" {self.min_available_clients} {self.min_fit_clients}")
+        log(INFO, f"Sample in round {self.round} with {self.min_eval_clients}")
+        return max(num_clients, self.min_eval_clients), self.min_eval_clients
 
     def configure_fit(
             self, rnd: int, parameters: Parameters, client_manager: ClientManager
     ) -> List[Tuple[ClientProxy, FitIns]]:
         """Configure the next round of training."""
         to_send = []
+        log(INFO,f"Round {rnd}")
+        if rnd == 1:
+            client_manager.wait_for(self.min_available_clients)
         sample_size, min_num_clients = self.num_fit_clients(
             client_manager.num_available()
         )
@@ -294,7 +356,7 @@ class TCCifarIFCA(CustomFedAvg):
         if self.current_epoch < self.local_epochs:
             self.clients = {}
             if self.blacklisted > 0:
-                if rnd == 0:
+                if rnd == 1:
                     # form the blacklist by sampling n clients
                     cids = [client.cid[0:-5] for client in clients]
                     to_blacklist = random.sample(cids, self.blacklisted)
@@ -321,7 +383,7 @@ class TCCifarIFCA(CustomFedAvg):
                 fit_ins = FitIns(weights_to_parameters(self.models[self.clients[
                     common_cid]]), config)
                 if client in self.blacklist:
-                    if rnd % 2 == 1:
+                    if rnd % 2 == 0:
                         fit_ins = self.weights[client]
                     else:
                         self.weights[client] = fit_ins
@@ -367,9 +429,10 @@ class TCCifarIFCA(CustomFedAvg):
             log(DEBUG,"Performing blacklist")
             for result in results:
                 if result[0] in self.blacklist:
+                    new_fit = FitIns(result[1].parameters, self.weights[result[0]].config)
                     log(DEBUG, f"{result[0]} in blacklist")
-                    self.weights[result[0]][0] = parameters_to_weights(result[1].parameters)
-            if rnd % 2 == 1:
+                    self.weights[result[0]] = new_fit
+            if rnd % 2 == 0:
                 for result in results:
                     if result[0] in self.blacklist:
                         results.remove(result)
@@ -408,6 +471,7 @@ class TCCifarIFCA(CustomFedAvg):
         clients = client_manager.sample(
             num_clients=sample_size, min_num_clients=min_num_clients
         )
+        self.round += 1
 
         self.clients = {}
         sent_cids = []
