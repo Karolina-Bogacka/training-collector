@@ -9,6 +9,10 @@ services:
     ports:
       - "8000:8000"
       - "8080:8080"
+    volumes:
+      - type: bind
+        source: /Users/karolinabogacka/PycharmProjects/fl-local-operations/german-traffic
+        target: /german-traffic
 
 networks:
   default:

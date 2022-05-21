@@ -11,6 +11,7 @@ import flwr as fl
 import pandas as pd
 import requests
 import tensorflow as tf
+from PIL import Image
 from config import REPOSITORY_ADDRESS, JSON_FILE
 from flwr.common import Weights, Scalar, Parameters, EvaluateRes, parameters_to_weights
 from flwr.common.logger import log
@@ -35,6 +36,11 @@ from starlette.concurrency import run_in_threadpool
 from tensorflow.keras.layers import Conv2D, Dropout, Flatten, Dense
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 #from tensorflow.keras.applications.vgg16 import VGG16
+from keras_preprocessing.image import ImageDataGenerator
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import Conv2D, MaxPool2D, Dense, Flatten, Dropout
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 from application.src.custom_strategy import CustomFedAvg
@@ -91,44 +97,45 @@ class TCCifarFedAvg(CustomFedAvg):
         self.num_rounds = num_rounds
         self.eval_fn = eval_fn
         data = {"loss":[], "accuracy":[]}
-        (self.x_train, self.y_train), (self.x_test, self.y_test) = \
-            tf.keras.datasets.cifar10.load_data()
-        self.x_train = self.x_train.astype('float32')
-        self.x_test = self.x_test.astype('float32')
-        self.x_train = self.x_train / 255.0
-        self.x_test = self.x_test / 255.0
-        self.y_train = np_utils.to_categorical(self.y_train)
-        self.y_test = np_utils.to_categorical(self.y_test)
+        log(INFO, f"{os.path.join(os.sep, 'german-traffic','Test.csv')}")
+        self.y_test = pd.read_csv(os.path.join(os.sep, 'german-traffic','Test.csv'))
+        labels = self.y_test["ClassId"].values
+        imgs = self.y_test["Path"].values
+        labels = np.array(labels)
+        data2 = []
+
+        # Retreiving the images
+
+        for img in imgs:
+            image = Image.open(os.path.join(os.sep, 'german-traffic', img))
+            image = image.resize([32, 32])
+            data2.append(np.array(image))
+
+        self.x_test = np.array(data2)
+        self.y_test = to_categorical(labels, 43)
+
         self.results = pd.DataFrame(data)
         self.losses = []
         self.times = []
         self.evaluated = []
         self.model = Sequential()
-        self.model.add(Conv2D(32, (3, 3), input_shape=(32, 32, 3), activation='relu',
-                              padding='same'))
-        self.model.add(Dropout(0.2))
-        self.model.add(Conv2D(32, (3, 3), activation='relu', padding='same'))
-        self.model.add(MaxPooling2D(pool_size=(2, 2)))
-        self.model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
-        self.model.add(Dropout(0.2))
-        self.model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
-        self.model.add(MaxPooling2D(pool_size=(2, 2)))
-        self.model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
-        self.model.add(Dropout(0.2))
-        self.model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
-        self.model.add(MaxPooling2D(pool_size=(2, 2)))
+        self.model.add(Conv2D(filters=32, kernel_size=(5, 5), activation='relu',
+                         input_shape=self.x_test.shape[1:]))
+        self.model.add(Conv2D(filters=32, kernel_size=(5, 5), activation='relu'))
+        self.model.add(MaxPool2D(pool_size=(2, 2)))
+        self.model.add(Dropout(rate=0.25))
+        self.model.add(Conv2D(filters=64, kernel_size=(3, 3), activation='relu'))
+        self.model.add(Conv2D(filters=64, kernel_size=(3, 3), activation='relu'))
+        self.model.add(MaxPool2D(pool_size=(2, 2)))
+        self.model.add(Dropout(rate=0.25))
         self.model.add(Flatten())
-        self.model.add(Dropout(0.2))
-        self.model.add(Dense(1024, activation='relu', kernel_constraint=maxnorm(3)))
-        self.model.add(Dropout(0.2))
-        self.model.add(Dense(512, activation='relu', kernel_constraint=maxnorm(3)))
-        self.model.add(Dropout(0.2))
-        self.model.add(Dense(10, activation='softmax'))
-        lrate = 0.01
-        decay = lrate / 50
-        sgd = SGD(lr=lrate, momentum=0.9, decay=decay, nesterov=False)
-        self.model.compile(loss='categorical_crossentropy', optimizer=sgd,
-                           metrics=['accuracy'])
+        self.model.add(Dense(256, activation='relu'))
+        self.model.add(Dropout(rate=0.5))
+        self.model.add(Dense(43, activation='softmax'))
+
+        # Compilation of the model
+        self.model.compile(loss='categorical_crossentropy', optimizer='adam',
+                      metrics=['accuracy'])
 
         jobs[self.id] = Status(status=StatusEnum.WAITING)
 
