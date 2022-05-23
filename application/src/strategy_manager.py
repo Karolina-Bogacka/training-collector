@@ -11,10 +11,12 @@ import flwr as fl
 import pandas as pd
 import requests
 import tensorflow as tf
+from PIL import Image
 from config import REPOSITORY_ADDRESS, JSON_FILE
 from flwr.common import Weights, Scalar, Parameters, EvaluateRes, parameters_to_weights
 from flwr.common.logger import log
 from flwr.server.client_proxy import ClientProxy
+from keras.utils.np_utils import to_categorical
 from pydloc.models import Status, StatusEnum
 from tensorflow.keras.layers import BatchNormalization, MaxPool2D, InputLayer
 from tensorflow.keras.layers import Conv2D, Dropout, Flatten, Dense
@@ -93,31 +95,40 @@ class TCCifarFedAvg(CustomFedAvg):
         self.results = pd.DataFrame(data)
         self.losses = []
         self.times = []
+        self.evaluated = []
+        log(INFO, f"{os.path.join(os.sep, 'german-traffic', 'Test.csv')}")
+        self.y_test = pd.read_csv(os.path.join(os.sep, 'german-traffic', 'Test.csv'))
+        labels = self.y_test["ClassId"].values
+        imgs = self.y_test["Path"].values
+        labels = np.array(labels)
+        data2 = []
+
+        # Retreiving the images
+
+        for img in imgs:
+            image = Image.open(os.path.join(os.sep, 'german-traffic', img))
+            image = image.resize([32, 32])
+            data2.append(np.array(image))
+
+        self.x_test = np.array(data2)
+        self.y_test = to_categorical(labels, 43)
         self.model = Sequential()
-        self.model.add(Conv2D(32, (3, 3), input_shape=(32, 32, 3), activation='relu',
-                              padding='same'))
-        self.model.add(Dropout(0.2))
-        self.model.add(Conv2D(32, (3, 3), activation='relu', padding='same'))
-        self.model.add(MaxPooling2D(pool_size=(2, 2)))
-        self.model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
-        self.model.add(Dropout(0.2))
-        self.model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
-        self.model.add(MaxPooling2D(pool_size=(2, 2)))
-        self.model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
-        self.model.add(Dropout(0.2))
-        self.model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
-        self.model.add(MaxPooling2D(pool_size=(2, 2)))
+        self.model.add(Conv2D(filters=32, kernel_size=(5, 5), activation='relu',
+                              input_shape=self.x_test.shape[1:]))
+        self.model.add(Conv2D(filters=32, kernel_size=(5, 5), activation='relu'))
+        self.model.add(MaxPool2D(pool_size=(2, 2)))
+        self.model.add(Dropout(rate=0.25))
+        self.model.add(Conv2D(filters=64, kernel_size=(3, 3), activation='relu'))
+        self.model.add(Conv2D(filters=64, kernel_size=(3, 3), activation='relu'))
+        self.model.add(MaxPool2D(pool_size=(2, 2)))
+        self.model.add(Dropout(rate=0.25))
         self.model.add(Flatten())
-        self.model.add(Dropout(0.2))
-        self.model.add(Dense(1024, activation='relu', kernel_constraint=maxnorm(3)))
-        self.model.add(Dropout(0.2))
-        self.model.add(Dense(512, activation='relu', kernel_constraint=maxnorm(3)))
-        self.model.add(Dropout(0.2))
-        self.model.add(Dense(10, activation='softmax'))
-        lrate = 0.01
-        decay = lrate / 50
-        sgd = SGD(lr=lrate, momentum=0.9, decay=decay, nesterov=False)
-        self.model.compile(loss='categorical_crossentropy', optimizer=sgd,
+        self.model.add(Dense(256, activation='relu'))
+        self.model.add(Dropout(rate=0.5))
+        self.model.add(Dense(43, activation='softmax'))
+
+        # Compilation of the model
+        self.model.compile(loss='categorical_crossentropy', optimizer='adam',
                            metrics=['accuracy'])
 
         jobs[self.id] = Status(status=StatusEnum.WAITING)
@@ -145,8 +156,10 @@ class TCCifarFedAvg(CustomFedAvg):
                   'wb') as handle:
             self.losses.append(results[0])
             self.times.append(time.time())
+            losses, accuracy = self.model.evaluate(self.x_test, self.y_test, 32)
+            self.evaluated.append((losses, accuracy))
             results_to_file = {"loss": self.losses,
-                       "times": self.times}
+                       "times": self.times, "evaluate":self.evaluated}
             pickle.dump(results_to_file, handle, protocol=pickle.HIGHEST_PROTOCOL)
             self.model.save("/code/application/model")
         log(INFO, results)
