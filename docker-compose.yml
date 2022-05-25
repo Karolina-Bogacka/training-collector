@@ -11,7 +11,7 @@ services:
       - "8080:8080"
     volumes:
       - type: bind
-        source: cifar-10-batches-py
+        source: /home/wasielk/federated-experiments/fl-training-collector/cifar-10-batches-py
         target: /cifar-10-batches-py
 
 networks:
