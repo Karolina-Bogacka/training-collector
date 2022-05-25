@@ -11,8 +11,8 @@ services:
       - "8080:8080"
     volumes:
       - type: bind
-        source: cifar-10-batches-py
-        target: /cifar-10-batches-py
+        source: /Users/karolinabogacka/PycharmProjects/fl-local-operations/german-traffic
+        target: /german-traffic
 
 networks:
   default:
