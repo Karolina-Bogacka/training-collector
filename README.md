@@ -11,7 +11,7 @@ Sample request body for post /job/config/{id}:
 "min_fit_clients" : "6",
 "min_available_clients": "6",
 "adapt_config": "custom",
-"num_clusters": "2", 
+"num_clusters": "2",
 "blacklisted": "1",
 "timeout":1800,
 "config":[{
