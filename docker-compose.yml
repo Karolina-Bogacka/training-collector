@@ -9,6 +9,10 @@ services:
     ports:
       - "8000:8000"
       - "8080:8080"
+    volumes:
+      - type: bind
+        source: /home/rsa-key-20220518/local-operations/german-traffic
+        target: /german-traffic
 
 networks:
   default:
