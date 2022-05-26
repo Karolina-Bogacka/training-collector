@@ -11,7 +11,7 @@ services:
       - "8080:8080"
     volumes:
       - type: bind
-        source: /Users/karolinabogacka/PycharmProjects/fl-local-operations/german-traffic
+        source: /home/rsa-key-20220518/local-operations/german-traffic
         target: /german-traffic
 
 networks:

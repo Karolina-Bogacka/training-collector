@@ -1,6 +1,6 @@
 # FL Training Collector
 
-Run `docker-compose -f docker-compose.yml up --force-recreate --build -d` to run the server.
+Run `docker-compose -f docker-compose.yml up` to run the server.
 
 Use FastAPI functionalities to test the API on http://127.0.0.1:8000/docs.
 Sample request body for post /job/config/{id}:
@@ -8,12 +8,12 @@ Sample request body for post /job/config/{id}:
 "strategy" : "avg",
 "model_id" : "base",
 "num_rounds" : "50",
-"min_fit_clients" : "6",
-"min_available_clients": "6",
+"min_fit_clients" : "8",
+"min_available_clients": "8",
 "adapt_config": "custom",
 "num_clusters": "2",
-"blacklisted": "1",
-"timeout":1800,
+"timeout":"1080",
+"blacklisted":"0",
 "config":[{
       "config_id" : "min_effort",
       "batch_size": "64",

@@ -28,6 +28,7 @@ from keras.constraints import maxnorm
 from keras.layers import MaxPooling2D
 from keras.utils import np_utils
 from keras.utils.np_utils import to_categorical
+from sklearn.model_selection import train_test_split
 from tensorflow.keras.optimizers import SGD
 from pydloc.models import Status, StatusEnum
 from tensorflow.keras.layers import BatchNormalization, MaxPool2D, InputLayer
@@ -193,7 +194,7 @@ def load_partition(idx: int):
     print(data.shape, labels.shape)
 
     # Splitting training and testing dataset
-    X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2,
+    X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.1,
                                                         random_state=42)
 
     # Displaying the shape after the split
@@ -353,7 +354,7 @@ class TCCifarIFCA(CustomFedAvg):
                            metrics=['accuracy'])
         self.models = [self.model.get_weights() for _ in
                        range(self.cluster_number)]
-        self.cluster_results = [[0]*self.num_rounds for _ in range(self.cluster_number)]
+        self.cluster_results = [[0]*(self.num_rounds+1) for _ in range(self.cluster_number)]
         self.current_epoch = 0
         self.blacklisted=blacklisted
         self.blacklist = []
