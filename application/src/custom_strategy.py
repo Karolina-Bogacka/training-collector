@@ -158,7 +158,6 @@ class CustomFedAvg(Strategy):
                           self.blacklist else (client, FitIns(weights_to_parameters(
                     self.weights[client]),config)) for client in clients]
         log(INFO, f"Blacklisted {self.blacklist} from clients {clients}")
-        self.round += 1
         # update weights so that they have the old available parameters
         # Return client/config pairs
         return to_fit
@@ -217,6 +216,7 @@ class CustomFedAvg(Strategy):
                     if result[0] in self.blacklist:
                         results.remove(result)
                 #log(DEBUG, f"Final results {results}")
+        self.round += 1
         weights_results = [
             (parameters_to_weights(fit_res.parameters), fit_res.num_examples)
             for client, fit_res in results
